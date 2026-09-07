@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExamPrep AI - Smart Quiz & Exam Prep Agent</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col font-sans transition-colors duration-200">
+
+    <!-- Navbar -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('quiz')">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+                        <i class="fa-solid fa-graduation-cap text-lg"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">ExamPrep AI</span>
+                        <span class="text-xs px-2 py-0.5 ml-2 bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 rounded-full font-semibold">Quiz Agent</span>
+                    </div>
+                </div>
+
+                <nav class="hidden md:flex space-x-1 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
+                    <button onclick="switchTab('quiz')" id="tab-btn-quiz" class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-all text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 shadow-sm">
+                        <i class="fa-solid fa-play mr-2"></i>Take Quiz
+                    </button>
+                    <button onclick="switchTab('upload')" id="tab-btn-upload" class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                        <i class="fa-solid fa-file-pdf mr-2"></i>Upload PDF / AI Generator
+                    </button>
+                    <button onclick="switchTab('bank')" id="tab-btn-bank" class="nav-tab px-4 py-2 text-sm font-medium rounded-lg transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                        <i class="fa-solid fa-layer-group mr-2"></i>Question Bank (<span id="bank-count-badge">0</span>)
+                    </button>
+                </nav>
+
+                <div class="flex items-center space-x-3">
+                    <button onclick="openApiKeyModal()" class="p-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 hover:bg-blue-100 text-xs font-semibold transition flex items-center">
+                        <i class="fa-solid fa-key mr-1.5"></i>API Key
+                    </button>
+                    <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">
+                        <i class="fa-solid fa-moon dark:hidden"></i>
+                        <i class="fa-solid fa-sun hidden dark:inline"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
+
+        <!-- TAB 1: QUIZ INTERFACE -->
+        <div id="tab-quiz" class="tab-content flex-1 flex flex-col">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Active Quiz Set</label>
+                    <select id="quiz-selector" onchange="loadSelectedQuizSet()" class="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 rounded-xl px-3 py-2 font-semibold text-base sm:text-lg focus:ring-2 focus:ring-blue-500 outline-none max-w-md w-full">
+                    </select>
+                </div>
+
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 bg-slate-100 dark:bg-slate-700/60 px-3 py-1.5 rounded-xl">
+                        <i class="fa-solid fa-clock text-blue-500"></i>
+                        <span id="timer-display" class="font-mono text-sm font-semibold">00:00</span>
+                    </div>
+                    
+                    <button onclick="restartQuiz()" class="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition">
+                        <i class="fa-solid fa-rotate-right mr-1"></i>Reset
+                    </button>
+
+                    <div class="hidden sm:flex items-center space-x-2 border-l border-slate-200 dark:border-slate-700 pl-4">
+                        <span class="text-xs text-slate-500">Mode:</span>
+                        <select id="mode-selector" onchange="changeFeedbackMode()" class="text-xs bg-slate-100 dark:bg-slate-700 border-none rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200">
+                            <option value="next_click">Answer on "Next"</option>
+                            <option value="instant">Instant Reveal</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quiz Screen -->
+            <div id="quiz-active-view" class="flex-1 flex flex-col justify-between">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm flex-1 flex flex-col">
+                    <div class="flex items-center justify-between text-xs sm:text-sm text-slate-500 font-medium mb-3">
+                        <span>Question <span id="current-q-num" class="text-slate-900 dark:text-white font-bold">1</span> of <span id="total-q-num">10</span></span>
+                        <div class="flex items-center space-x-3">
+                            <span id="score-live-badge" class="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-bold">Score: 0</span>
+                        </div>
+                    </div>
+
+                    <div class="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden mb-6">
+                        <div id="progress-bar-fill" class="bg-blue-600 h-full transition-all duration-300 rounded-full" style="width: 10%;"></div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h2 id="question-text" class="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 leading-relaxed">
+                            Loading question...
+                        </h2>
+                    </div>
+
+                    <div id="options-container" class="space-y-3 my-auto"></div>
+
+                    <!-- Explanation Box -->
+                    <div id="explanation-box" class="hidden mt-6 p-4 rounded-xl border transition-all duration-300">
+                        <div class="flex items-start space-x-3">
+                            <div id="explanation-icon" class="text-xl mt-0.5"></div>
+                            <div class="flex-1">
+                                <h4 id="explanation-title" class="font-bold text-sm mb-1"></h4>
+                                <p id="explanation-text" class="text-sm leading-relaxed opacity-90"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="mt-6 flex items-center justify-between">
+                    <button id="prev-btn" onclick="prevQuestion()" class="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40">
+                        <i class="fa-solid fa-arrow-left mr-2"></i>Previous
+                    </button>
+
+                    <div class="flex items-center space-x-3">
+                        <button id="hint-btn" onclick="showHint()" class="px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm font-medium hover:bg-amber-100">
+                            <i class="fa-regular fa-lightbulb mr-1.5"></i>Hint
+                        </button>
+                        
+                        <button id="next-btn" onclick="nextQuestion()" class="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg shadow-blue-500/25 transition flex items-center">
+                            <span id="next-btn-text">Next Question</span>
+                            <i class="fa-solid fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quiz Results View -->
+            <div id="quiz-results-view" class="hidden flex-1 flex flex-col items-center justify-center py-8">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 max-w-2xl w-full shadow-xl text-center">
+                    <div class="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <h2 class="text-2xl font-extrabold mb-2">Quiz Completed!</h2>
+                    <div class="grid grid-cols-3 gap-4 my-6">
+                        <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <span class="block text-2xl font-black text-blue-600" id="res-score-percentage">0%</span>
+                            <span class="text-xs text-slate-500 uppercase font-semibold">Score</span>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <span class="block text-2xl font-black text-emerald-500" id="res-correct-count">0/0</span>
+                            <span class="text-xs text-slate-500 uppercase font-semibold">Correct</span>
+                        </div>
+                        <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <span class="block text-2xl font-black text-slate-700 dark:text-slate-300" id="res-time-taken">00:00</span>
+                            <span class="text-xs text-slate-500 uppercase font-semibold">Time</span>
+                        </div>
+                    </div>
+                    <button onclick="restartQuiz()" class="px-6 py-3 rounded-xl bg-blue-600 text-white font-semibold shadow-md">Retake Quiz</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: PDF & AI GENERATOR -->
+        <div id="tab-upload" class="tab-content hidden flex-1 flex flex-col">
+            <div class="max-w-4xl mx-auto w-full space-y-6">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div class="text-center max-w-xl mx-auto mb-6">
+                        <div class="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-3">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        </div>
+                        <h2 class="text-xl sm:text-2xl font-bold">Generate AI Quiz from PDF</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Upload a PDF or paste lecture notes below to automatically generate practice questions!</p>
+                    </div>
+
+                    <div id="drop-zone" onclick="document.getElementById('file-input').click()" class="border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-500 bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-8 text-center cursor-pointer transition">
+                        <input type="file" id="file-input" accept=".pdf,.txt" class="hidden" onchange="handleFileSelect(event)">
+                        <i class="fa-solid fa-cloud-arrow-up text-4xl text-slate-400 mb-3"></i>
+                        <p class="font-semibold">Click to upload PDF or drag & drop</p>
+                    </div>
+
+                    <div id="upload-status" class="hidden mt-4 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 text-sm flex items-center space-x-3">
+                        <i class="fa-solid fa-circle-notch fa-spin text-lg"></i>
+                        <span id="upload-status-text">Processing uploaded file...</span>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <h3 class="font-bold text-lg mb-2">Lecture Notes / Extracted Text</h3>
+                    <textarea id="raw-text-input" rows="8" placeholder="Extracted text from PDF will appear here, or paste your study material manually..." class="w-full p-4 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+
+                    <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <input id="custom-set-title" type="text" placeholder="Quiz Title (e.g. Biology Ch. 4)" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm outline-none w-full sm:w-auto flex-1">
+                        
+                        <button onclick="generateQuizWithAI()" class="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow transition flex items-center justify-center">
+                            <i class="fa-solid fa-robot mr-2"></i>Generate AI Quiz
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: BANK -->
+        <div id="tab-bank" class="tab-content hidden flex-1 flex flex-col">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm flex-1">
+                <h2 class="text-xl font-bold mb-4">Saved Question Sets</h2>
+                <div id="quiz-sets-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal: API Key Setup -->
+    <div id="apikey-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4">
+            <h3 class="font-bold text-lg">Google Gemini API Key</h3>
+            <p class="text-xs text-slate-500">To enable AI quiz generation directly from your browser, enter a free Gemini API key below.</p>
+            <input id="gemini-key-input" type="password" placeholder="AIzaSy..." class="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm">
+            <div class="flex justify-between items-center text-xs">
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline">Get Free API Key →</a>
+                <button onclick="saveApiKey()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-xl">Save Key</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let quizSets = [
+            {
+                id: 'set-sample',
+                title: 'Sample General Science Quiz',
+                questions: [
+                    {
+                        question: "What is the primary product of photosynthesis in plants?",
+                        options: ["Carbon Dioxide", "Glucose", "Nitrogen", "Methane"],
+                        correctIndex: 1,
+                        hint: "It is a simple sugar used by plants for energy.",
+                        explanation: "Photosynthesis combines water and carbon dioxide using sunlight to produce glucose and oxygen."
+                    }
+                ]
+            }
+        ];
+
+        let currentSetId = 'set-sample';
+        let currentQuizQuestions = [];
+        let currentQuestionIdx = 0;
+        let selectedAnswers = {};
+        let feedbackMode = 'next_click';
+        let timerSeconds = 0, timerInterval = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) document.getElementById('gemini-key-input').value = savedKey;
+            
+            populateQuizSelector();
+            loadSelectedQuizSet();
+        });
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            if (tabId === 'bank') renderBankView();
+        }
+
+        function toggleTheme() { document.documentElement.classList.toggle('dark'); }
+
+        function openApiKeyModal() { document.getElementById('apikey-modal').classList.remove('hidden'); }
+        function saveApiKey() {
+            const val = document.getElementById('gemini-key-input').value.trim();
+            localStorage.setItem('gemini_api_key', val);
+            document.getElementById('apikey-modal').classList.add('hidden');
+            alert("API Key Saved!");
+        }
+
+        function populateQuizSelector() {
+            const select = document.getElementById('quiz-selector');
+            select.innerHTML = '';
+            quizSets.forEach(set => {
+                const opt = document.createElement('option');
+                opt.value = set.id;
+                opt.textContent = `${set.title} (${set.questions.length} Qs)`;
+                select.appendChild(opt);
+            });
+            document.getElementById('bank-count-badge').textContent = quizSets.length;
+        }
+
+        function loadSelectedQuizSet() {
+            const select = document.getElementById('quiz-selector');
+            currentSetId = select.value || quizSets[0].id;
+            const setObj = quizSets.find(s => s.id === currentSetId);
+            currentQuizQuestions = JSON.parse(JSON.stringify(setObj.questions));
+            restartQuiz();
+        }
+
+        function restartQuiz() {
+            currentQuestionIdx = 0;
+            selectedAnswers = {};
+            if (timerInterval) clearInterval(timerInterval);
+            timerSeconds = 0;
+            timerInterval = setInterval(() => {
+                timerSeconds++;
+                const mins = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+                const secs = (timerSeconds % 60).toString().padStart(2, '0');
+                document.getElementById('timer-display').textContent = `${mins}:${secs}`;
+            }, 1000);
+
+            document.getElementById('quiz-active-view').classList.remove('hidden');
+            document.getElementById('quiz-results-view').classList.add('hidden');
+            renderCurrentQuestion();
+        }
+
+        function renderCurrentQuestion() {
+            const q = currentQuizQuestions[currentQuestionIdx];
+            document.getElementById('current-q-num').textContent = currentQuestionIdx + 1;
+            document.getElementById('total-q-num').textContent = currentQuizQuestions.length;
+            document.getElementById('question-text').textContent = q.question;
+
+            const pct = ((currentQuestionIdx + 1) / currentQuizQuestions.length) * 100;
+            document.getElementById('progress-bar-fill').style.width = `${pct}%`;
+
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            const userSelected = selectedAnswers[currentQuestionIdx];
+            const isAnswered = userSelected !== undefined;
+
+            q.options.forEach((optText, idx) => {
+                const optBtn = document.createElement('button');
+                let borderStyle = "border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40";
+                
+                if (isAnswered) {
+                    if (idx === q.correctIndex) borderStyle = "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-100";
+                    else if (idx === userSelected) borderStyle = "border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100";
+                }
+
+                optBtn.className = `w-full text-left p-4 rounded-xl border font-medium transition flex items-center space-x-3 ${borderStyle}`;
+                optBtn.onclick = () => { selectedAnswers[currentQuestionIdx] = idx; renderCurrentQuestion(); };
+                optBtn.innerHTML = `<span class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold shrink-0">${String.fromCharCode(65 + idx)}</span><span>${optText}</span>`;
+                container.appendChild(optBtn);
+            });
+
+            document.getElementById('prev-btn').disabled = (currentQuestionIdx === 0);
+            
+            const expBox = document.getElementById('explanation-box');
+            if (isAnswered) {
+                expBox.classList.remove('hidden');
+                expBox.className = userSelected === q.correctIndex 
+                    ? "mt-6 p-4 rounded-xl border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 text-emerald-900 dark:text-emerald-200"
+                    : "mt-6 p-4 rounded-xl border bg-amber-50 dark:bg-amber-950/30 border-amber-300 text-amber-900 dark:text-amber-200";
+                document.getElementById('explanation-title').textContent = userSelected === q.correctIndex ? "Correct!" : `Incorrect (Correct Answer: ${String.fromCharCode(65 + q.correctIndex)})`;
+                document.getElementById('explanation-text').textContent = q.explanation;
+            } else {
+                expBox.classList.add('hidden');
+            }
+        }
+
+        function showHint() {
+            alert("💡 HINT: " + (currentQuizQuestions[currentQuestionIdx].hint || "Think about core concepts."));
+        }
+
+        function prevQuestion() { if (currentQuestionIdx > 0) { currentQuestionIdx--; renderCurrentQuestion(); } }
+        function nextQuestion() {
+            if (currentQuestionIdx < currentQuizQuestions.length - 1) {
+                currentQuestionIdx++;
+                renderCurrentQuestion();
+            } else {
+                clearInterval(timerInterval);
+                document.getElementById('quiz-active-view').classList.add('hidden');
+                document.getElementById('quiz-results-view').classList.remove('hidden');
+                const correct = Object.keys(selectedAnswers).filter(i => selectedAnswers[i] === currentQuizQuestions[i].correctIndex).length;
+                document.getElementById('res-score-percentage').textContent = `${Math.round((correct / currentQuizQuestions.length) * 100)}%`;
+                document.getElementById('res-correct-count').textContent = `${correct}/${currentQuizQuestions.length}`;
+            }
+        }
+
+        // PDF Processing
+        async function handleFileSelect(evt) {
+            const file = evt.target.files[0];
+            if (!file) return;
+            const statusEl = document.getElementById('upload-status');
+            statusEl.classList.remove('hidden');
+
+            if (file.type === "application/pdf") {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    fullText += content.items.map(item => item.str).join(" ") + "\n";
+                }
+                document.getElementById('raw-text-input').value = fullText;
+                document.getElementById('custom-set-title').value = file.name.replace('.pdf', '');
+            } else {
+                const reader = new FileReader();
+                reader.onload = (e) => document.getElementById('raw-text-input').value = e.target.result;
+                reader.readAsText(file);
+            }
+            statusEl.classList.add('hidden');
+        }
+
+        // AI Quiz Generation via Gemini API
+        async function generateQuizWithAI() {
+            const text = document.getElementById('raw-text-input').value.trim();
+            const apiKey = localStorage.getItem('gemini_api_key');
+
+            if (!text) return alert("Please upload a PDF or enter text first!");
+            if (!apiKey) {
+                openApiKeyModal();
+                return alert("Please enter a free Gemini API Key to use AI Generation.");
+            }
+
+            const statusEl = document.getElementById('upload-status');
+            document.getElementById('upload-status-text').textContent = "AI Agent is generating exam questions...";
+            statusEl.classList.remove('hidden');
+
+            try {
+                const prompt = `Based on this study text, generate 5 multiple-choice exam questions. Return strictly JSON with format:
+[
+  {
+    "question": "Question string",
+    "options": ["Opt A", "Opt B", "Opt C", "Opt D"],
+    "correctIndex": 0,
+    "hint": "Brief hint",
+    "explanation": "Detailed answer explanation"
+  }
+]
+Text: ${text.substring(0, 10000)}`;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                const data = await response.json();
+                let rawRes = data.candidates[0].content.parts[0].text;
+                rawRes = rawRes.replace(/```json/g, '').replace(/```/g, '').trim();
+                const questions = JSON.parse(rawRes);
+
+                const newSet = {
+                    id: 'set-' + Date.now(),
+                    title: document.getElementById('custom-set-title').value || "AI Quiz Set",
+                    questions: questions
+                };
+
+                quizSets.push(newSet);
+                populateQuizSelector();
+                currentSetId = newSet.id;
+                document.getElementById('quiz-selector').value = currentSetId;
+                loadSelectedQuizSet();
+                switchTab('quiz');
+            } catch (err) {
+                console.error(err);
+                alert("AI Generation failed. Check your API key or text length.");
+            } finally {
+                statusEl.classList.add('hidden');
+            }
+        }
+
+        function renderBankView() {
+            const grid = document.getElementById('quiz-sets-grid');
+            grid.innerHTML = '';
+            quizSets.forEach(s => {
+                grid.innerHTML += `
+                    <div class="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
+                        <h4 class="font-bold mb-1">${s.title}</h4>
+                        <p class="text-xs text-slate-500 mb-3">${s.questions.length} Questions</p>
+                        <button onclick="currentSetId='${s.id}'; loadSelectedQuizSet(); switchTab('quiz');" class="text-xs font-bold text-blue-600">Start Quiz →</button>
+                    </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
